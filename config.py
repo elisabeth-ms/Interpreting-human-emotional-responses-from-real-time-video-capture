@@ -17,10 +17,12 @@ WEIGHT_DECAY = 1
 GAMMA = 0
 RESULTS_PER_PERSON = False
 MODEL_DISPLAY = 1
-DISPLAY_MODE = "webcam"
+DISPLAY_MODE = "rostopic" #"webcam" "video" or "rostopic"
 FRAME_RATE_WEBCAM = 50
 FRAME_RATE_VID = 3
-
+FRAME_RATE_ROSTOPIC = 20
+CAMERA_ROSTOPIC = "/xtion/rgb/image_raw" # Rostopic for the camera
 # WEAKLOSS PARAMETERS 
 LOSS_BOUNDS = [[0., 0.15], [0.85, 10.0]] # We require at least 85% of the frames to be correct.
-LOSS_SLACK = 100.0 
+LOSS_SLACK = 100.0
+EMOTION_TOPIC = "/emotion_recognizer/emotion"

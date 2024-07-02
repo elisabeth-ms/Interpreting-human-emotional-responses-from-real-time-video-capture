@@ -26,6 +26,16 @@ from weak_loss_layer.weak_loss import WeakLoss
 from torchvision import transforms
 
 
+# Additional ROS imports
+import rospy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge, CvBridgeError
+import threading
+from std_msgs.msg import String
+
+
+
+
 root_path = os.getcwd()
 
 # command line argument
@@ -39,10 +49,24 @@ ap.add_argument('--percentage', type=float, default=cfg.PERCEN, help="(float) Pe
 ap.add_argument('--weight_decay', type=float, default=cfg.WEIGHT_DECAY, help="(float) L2 regularization method. Default: 1")
 ap.add_argument('--results_per_person', type=bool, default=cfg.RESULTS_PER_PERSON, help="(boolean) Display the results obtained per person identified in the dataset. Default: False")
 ap.add_argument('--pretrained_model_display', type=int, default=cfg.MODEL_DISPLAY, help="(int) Selection of pretrained model used (1,2,3). Default: 1")
-ap.add_argument('--display_mode', default=cfg.DISPLAY_MODE, help="webcam/video. Selects input data from the model, emotions can be detected in real time via webcam or video input by the user. Default: webcam")
+ap.add_argument('--display_mode', default=cfg.DISPLAY_MODE, help="webcam/video/rostopic. Selects input data from the model, emotions can be detected in real time via webcam, video input or ROS topic as specified by the user. Default: webcam")
 ap.add_argument('--frame_rate', type=int,default=0, help="(int) Selects the number of frames necessary to determine a valid emotion.")
-
+ap.add_argument('--camera_rostopic', default=cfg.CAMERA_ROSTOPIC, help="Rostopic for the camera. Default: /xtion/rgb/image_raw")
+ap.add_argument('--emotion_topic', default=cfg.EMOTION_TOPIC, help="Rostopic for the emotion. Default: /emotion_recognizer/emotion")
 args = ap.parse_args()
+
+cv_image = None
+def image_callback(ros_image):
+    try:
+        # Convert the ROS image message to an OpenCV format
+        global cv_image 
+        cv_image = bridge.imgmsg_to_cv2(ros_image, "bgr8")
+        # print("Image received")
+    except CvBridgeError as e:
+        print(e)
+        return
+      
+
 
 mode = args.mode
 results_person = args.results_per_person
@@ -538,6 +562,9 @@ if mode == "display":
     count_frame = 0
     emotions = [0,0,0]
     emotions_total = [0,0,0]
+    
+    cap = None
+    cv_image = None
     # command line request for the path to the video file
     if display_mode == "video": 
         if frame_rate==0:
@@ -551,70 +578,112 @@ if mode == "display":
         while not cap.isOpened():
             cap = cv2.VideoCapture(video_path)
             cv2.waitKey(1000)
-    else:
+    elif display_mode == "webcam":
         if frame_rate==0:
             frame_rate = cfg.FRAME_RATE_WEBCAM
         cap = cv2.VideoCapture(0)
+    elif display_mode == "rostopic":
+        print("ros topic mode")
+        rospy.init_node('emotion_recognition', anonymous=True)
+        bridge = CvBridge()
+        rospy.Subscriber(args.camera_rostopic, Image, image_callback)
+        frame_rate = cfg.FRAME_RATE_ROSTOPIC
+        
+        emotion_pub = rospy.Publisher(args.emotion_topic, String, queue_size=10)
+        
+        # Start a new thread for the ROS spin loop
+        ros_thread = threading.Thread(target=rospy.spin)
+        ros_thread.start()
+
+        
+    else:
+        print("Invalid display mode")
+    
+    
+    emotion_display_duration_frames = 15
+    emotion_display_counter = 0
+    last_detected_emotion = None
         
     while True:
-        
-        # Find haar cascade to draw bounding box around face
-        ret, frame = cap.read()
-        wait_frame += 1
-        
-        if wait_frame>20:
+        if cap is not None:
+            # Find haar cascade to draw bounding box around face
+            ret, frame = cap.read()
+            wait_frame += 1
             
-            if not ret:
-                break
-           
+        if wait_frame>20 or cv_image is not None:
+            if cap is not None:
+              if not ret:
+                  break 
+            else:
+              if cv_image is not None:
+                  frame = cv_image
+                  # print("Frame received")
+                
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = facecasc.detectMultiScale(gray,scaleFactor=1.3, minNeighbors=5)
-            
             color = [(204, 102, 0),(0, 204, 0),(0, 0, 204)]
+            print("faces: ", faces)
+            if faces!=[]:
+                emotion_display_counter -= 1  # Decrement counter if no face is detected
             for (x, y, w, h) in faces:
-               
+                  
                 roi_gray = gray[y:y + h, x:x + w]
                 eyes = eye_cascade.detectMultiScale(roi_gray) # detecto tb los ojos porque aveces no funciona bien la cara,
-                                
+                                    
                 if len(eyes) > 0: 
                     count_frame += 1
                     img = cv2.resize(roi_gray, (224,224))
                     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-                 
+                    
                     normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
                     transform = transforms.ToTensor()
-                    
+                        
                     cropped_img = transform(img)
                     cropped_img = normalize(cropped_img)
                     cropped_img = cropped_img.reshape((1, 3, 224,224)) 
                     cropped_img = cropped_img.to(device)
-                   
+                      
                     output = model(cropped_img)
                     output = F.softmax(output.data,dim=1)
-                    
+                        
                     prediction = int(torch.max(output.data, 1)[1].cpu().numpy())
 
                     emotions[prediction] = emotions[prediction]+1
                     emotions_total[prediction] = emotions_total[prediction]+1
-
+                    print(emotions)
+                    print(count_frame)
                     if (count_frame==frame_rate):
                         prediction = emotions.index(max(emotions))
-                        cv2.rectangle(frame, (x, y - 20), (x+w, y+h + 10), color[prediction], 6)
-                        cv2.putText(frame, Own_emotion_dict[prediction], (x+20, y-40), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 6, cv2.LINE_AA)           
+                        print("Emotion detected: ", Own_emotion_dict[prediction])
+                        string_emotion = Own_emotion_dict[prediction]
+                        print(string_emotion)
+                        emotion_pub.publish(string_emotion)
+                        last_detected_emotion = (x, y, w, h, prediction)
+                        emotion_display_counter = emotion_display_duration_frames
                         count_frame = 0
                         emotions = [0,0,0]
-                        break
-                
-            cv2.imshow('Video', cv2.resize(frame,(800,480),interpolation = cv2.INTER_CUBIC))
+
+                        
+            if emotion_display_counter > 0:
             
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+                x, y, w, h, prediction = last_detected_emotion
+                cv2.rectangle(frame, (x, y - 20), (x + w, y + h + 10), color[prediction], 6)
+                cv2.putText(frame, Own_emotion_dict[prediction], (x + 20, y - 40), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 6, cv2.LINE_AA)
+                 
+            cv2.imshow('Video', cv2.resize(frame,(800,480),interpolation = cv2.INTER_CUBIC))
+                
+            if cv2.waitKey(50) & 0xFF == ord('q'):
                 print(emotions_total)
                 break
             if display_mode == "video": 
                 if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
                     print("Most of the emotions captured in the video are", Own_emotion_dict[emotions_total.index(max(emotions_total))] )
                     break
-
-    cap.release()
+        if rospy.is_shutdown():
+            break
+    if cap is not None:
+        cap.release()
     cv2.destroyAllWindows()
-    
+    ros_thread.join()  # Wait for the ROS thread to finish
+
+
