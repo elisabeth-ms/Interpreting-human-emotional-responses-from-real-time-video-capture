@@ -26,3 +26,4 @@ CAMERA_ROSTOPIC = "/xtion/rgb/image_raw" # Rostopic for the camera
 LOSS_BOUNDS = [[0., 0.15], [0.85, 10.0]] # We require at least 85% of the frames to be correct.
 LOSS_SLACK = 100.0
 EMOTION_TOPIC = "/emotion_recognizer/emotion"
+EMOTION_IMAGE_TOPIC = "/emotion_recognizer/emotion_image"

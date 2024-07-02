@@ -53,6 +53,7 @@ ap.add_argument('--display_mode', default=cfg.DISPLAY_MODE, help="webcam/video/r
 ap.add_argument('--frame_rate', type=int,default=0, help="(int) Selects the number of frames necessary to determine a valid emotion.")
 ap.add_argument('--camera_rostopic', default=cfg.CAMERA_ROSTOPIC, help="Rostopic for the camera. Default: /xtion/rgb/image_raw")
 ap.add_argument('--emotion_topic', default=cfg.EMOTION_TOPIC, help="Rostopic for the emotion. Default: /emotion_recognizer/emotion")
+ap.add_argument('--emotion_image_topic', default=cfg.EMOTION_IMAGE_TOPIC, help="Rostopic for the emotion image. Default: /emotion_recognizer/emotion_image")
 args = ap.parse_args()
 
 cv_image = None
@@ -590,6 +591,7 @@ if mode == "display":
         frame_rate = cfg.FRAME_RATE_ROSTOPIC
         
         emotion_pub = rospy.Publisher(args.emotion_topic, String, queue_size=10)
+        emotion_image_pub = rospy.Publisher(args.emotion_image_topic, Image, queue_size=10)
         
         # Start a new thread for the ROS spin loop
         ros_thread = threading.Thread(target=rospy.spin)
@@ -669,8 +671,12 @@ if mode == "display":
                 x, y, w, h, prediction = last_detected_emotion
                 cv2.rectangle(frame, (x, y - 20), (x + w, y + h + 10), color[prediction], 6)
                 cv2.putText(frame, Own_emotion_dict[prediction], (x + 20, y - 40), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 6, cv2.LINE_AA)
-                 
-            cv2.imshow('Video', cv2.resize(frame,(800,480),interpolation = cv2.INTER_CUBIC))
+            
+            if display_mode == "rostopic":
+                image_msg = bridge.cv2_to_imgmsg(frame, encoding="bgr8")
+                emotion_image_pub.publish(image_msg)
+            if display_mode != "rostopic":    
+                cv2.imshow('Video', cv2.resize(frame,(800,480),interpolation = cv2.INTER_CUBIC))
                 
             if cv2.waitKey(50) & 0xFF == ord('q'):
                 print(emotions_total)
