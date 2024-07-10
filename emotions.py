@@ -19,10 +19,10 @@ from torch.utils import data
 from datetime import date
 import datetime
 from dataset_creation import CustomImageDataset
-from evaluation import computeAUROC,evaluation,performance,plotConfusionMatrix,plotAcc,findMaxList,extract
+#from evaluation import computeAUROC,evaluation,performance,plotConfusionMatrix,plotAcc,findMaxList,extract
 import time
 import re
-from weak_loss_layer.weak_loss import WeakLoss
+# from weak_loss_layer.weak_loss import WeakLoss
 from torchvision import transforms
 
 
@@ -77,7 +77,7 @@ facecasc = cv2.CascadeClassifier(root_path + '/classifier/haarcascade_frontalfac
  
 # Emotion dictionaries
 Own_emotion_dict = {0: "neutral", 1: "positive", 2: "negative"}
-
+'''
 # Train the network 
 if mode == "train": 
 
@@ -533,7 +533,7 @@ if mode == "train":
             
             dict_results = path_results + "/accuracy_results_per_category_per_person.csv"
             df1_class.to_csv(dict_results, index=False) 
-            
+'''            
     
 # Emotions will be displayed on your face from the webcam feed
 if mode == "display":
@@ -567,6 +567,7 @@ if mode == "display":
     cap = None
     cv_image = None
     # command line request for the path to the video file
+    '''
     if display_mode == "video": 
         if frame_rate==0:
             frame_rate = cfg.FRAME_RATE_VID
@@ -583,7 +584,8 @@ if mode == "display":
         if frame_rate==0:
             frame_rate = cfg.FRAME_RATE_WEBCAM
         cap = cv2.VideoCapture(0)
-    elif display_mode == "rostopic":
+    '''
+    if display_mode == "rostopic":
         print("ros topic mode")
         rospy.init_node('emotion_recognition', anonymous=True)
         bridge = CvBridge()
@@ -654,16 +656,16 @@ if mode == "display":
                     emotions_total[prediction] = emotions_total[prediction]+1
                     print(emotions)
                     print(count_frame)
-                    if (count_frame==frame_rate):
-                        prediction = emotions.index(max(emotions))
-                        print("Emotion detected: ", Own_emotion_dict[prediction])
-                        string_emotion = Own_emotion_dict[prediction]
-                        print(string_emotion)
-                        emotion_pub.publish(string_emotion)
-                        last_detected_emotion = (x, y, w, h, prediction)
-                        emotion_display_counter = emotion_display_duration_frames
-                        count_frame = 0
-                        emotions = [0,0,0]
+                    #if (count_frame==frame_rate):
+                    prediction = emotions.index(max(emotions))
+                    print("Emotion detected: ", Own_emotion_dict[prediction])
+                    string_emotion = Own_emotion_dict[prediction]
+                    print(string_emotion)
+                    emotion_pub.publish(string_emotion)
+                    last_detected_emotion = (x, y, w, h, prediction)
+                    emotion_display_counter = emotion_display_duration_frames
+                    count_frame = 0
+                    emotions = [0,0,0]
 
                         
             if emotion_display_counter > 0:
@@ -678,9 +680,9 @@ if mode == "display":
             if display_mode != "rostopic":    
                 cv2.imshow('Video', cv2.resize(frame,(800,480),interpolation = cv2.INTER_CUBIC))
                 
-            if cv2.waitKey(50) & 0xFF == ord('q'):
-                print(emotions_total)
-                break
+            #if cv2.waitKey(50) & 0xFF == ord('q'):
+            #    print(emotions_total)
+            #    break
             if display_mode == "video": 
                 if cap.get(cv2.CAP_PROP_POS_FRAMES) == cap.get(cv2.CAP_PROP_FRAME_COUNT):
                     print("Most of the emotions captured in the video are", Own_emotion_dict[emotions_total.index(max(emotions_total))] )

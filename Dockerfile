@@ -1,4 +1,4 @@
-FROM ros:noetic-ros-base-focal
+FROM dustynv/pytorch:1.9-r32.7.1
 
 
 
@@ -12,48 +12,57 @@ RUN apt update --fix-missing && apt install -y --no-install-recommends ca-certif
     echo "Set disable_coredump false" >> /etc/sudo.conf                                              && \
     touch /home/$USERNAME/.sudo_as_admin_successful
 
-RUN apt update && apt install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0
-RUN apt-get install -y ros-$ROS_DISTRO-cv-bridge net-tools
+
+RUN sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
+
+RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
+
+RUN sudo apt update && apt install -y ros-melodic-ros-base
+
+#RUN apt-get update && apt-get install -y  python3-rosdep  python3-rosinstall  python3-rospkg  python3-catkin-pkg  python3-empy python3-rospkg-modules python3-catkin-pkg-modules
+
+
+RUN sudo apt install -y python-rosdep python-rosinstall python-rosinstall-generator python-wstool build-essential python3-catkin-tools python3-catkin-pkg-modules python3-rospkg-modules python3-catkin-pkg-modules
+
+RUN sudo rosdep init
+RUN rosdep update
 
 
 
 
-# Head over to https://docs.conda.io/en/latest/miniconda.html#linux-installers to grab the link for Miniconda
-# ARG MINICONDA_DOWNLOAD_LINK=https://repo.anaconda.com/miniconda/Miniconda3-py39_4.10.3-Linux-x86_64.sh
-# ARG MINICONDA_INSTALL_PATH=/home/$USERNAME
 
-# WORKDIR $MINICONDA_INSTALL_PATH
-# ENV PATH  ${MINICONDA_INSTALL_PATH}/miniconda3/bin:$PATH
 
-# 1. Install Miniconda and update packges to latest
-# ("conda init" is optional as above ENV adds the required PATH)
-# 2. Install PyTorch and any other required packages
-# 3. Clear conda/pip cache
-# RUN curl $MINICONDA_DOWNLOAD_LINK --create-dirs -o Miniconda.sh                && \
-#     bash Miniconda.sh -b -p ./miniconda3                                       && \
-#     rm Miniconda.sh                                                            && \
-#     conda init                                                                 && \
-#     conda update -y --all                                                      && \
-#     pip install numpy                                                          && \
-#     conda install -y pytorch torchvision cudatoolkit=11.1 -c pytorch -c nvidia && \
-#     conda clean -afy                                                           && \
-#     rm -rf .cache
 
 
 WORKDIR /home/$USERNAME
+RUN mkdir repos && cd repos
+RUN git clone https://github.com/opencv/opencv.git && cd opencv && git checkout 3.4 && \
+              mkdir build && cd build && cmake -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/usr/local -D PYTHON_EXECUTABLE=/usr/bin/python3.6 .. && \ 
+              make -j$(nproc) && make install
 
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-RUN python3.8 get-pip.py
-RUN python3.8 -m pip install torch==1.8.1+cu111 torchvision==0.9.1+cu111 -f https://download.pytorch.org/whl/torch_stable.html
-RUN python3.8 -m pip install scikit-learn==1.0.1
-RUN python3.8 -m pip install matplotlib==3.4.3
-RUN python3.8 -m pip install pandas==1.3.4
-RUN python3.8 -m pip install numpy==1.20.2
-RUN python3.8 -m pip install opencv_python
-RUN python3.8 -m pip install torchvision==0.9.1
-RUN python3.8 -m pip install pillow==8.2.0
 
-RUN mkdir repos
+RUN /bin/bash -c "source /opt/ros/melodic/setup.bash && mkdir -p catkin_ws/src && cd catkin_ws/src && \
+                  git clone https://github.com/ros-perception/vision_opencv.git && cd vision_opencv && git checkout melodic && \
+                  cd /home/$USERNAME/catkin_ws && catkin_make --cmake-args -DPYTHON_EXECUTABLE=/usr/bin/python3 \
+		  -DPYTHON_INCLUDE_DIR=/usr/include/python3.6m \
+                  -DPYTHON_LIBRARY=/usr/lib/aarch64-linux-gnu/libpython3.6m.so"
+
+RUN export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.6/site-packages/cv2/python-3.6
+RUN sudo apt install -y python3-matplotlib python3-pandas
+RUN pip3 install torchvision
+
+#copy entrypoint.sh /root/entrypoint.sh
+#RUN chmod +x /root/entrypoint.sh
+
+#ENTRYPOINT ["/root/entrypoint.sh"]
+# catkin_make 
+#&& source devel/setup.bash
+#RUN curl https://bootstrap.pypa.io/pip/3.6/get-pip.py -o get-pip.py
+#RUN python3.6 get-pip.py
+#RUN python3.6 -m pip install torch
+# RUN python3.6 -m pip install pandas
+#RUN python3.6 -m pip install torchvision
+# RUN python3.6 -m pip install pillow
+
+
 

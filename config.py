@@ -20,7 +20,7 @@ MODEL_DISPLAY = 1
 DISPLAY_MODE = "rostopic" #"webcam" "video" or "rostopic"
 FRAME_RATE_WEBCAM = 50
 FRAME_RATE_VID = 3
-FRAME_RATE_ROSTOPIC = 20
+FRAME_RATE_ROSTOPIC = 10
 CAMERA_ROSTOPIC = "/xtion/rgb/image_raw" # Rostopic for the camera
 # WEAKLOSS PARAMETERS 
 LOSS_BOUNDS = [[0., 0.15], [0.85, 10.0]] # We require at least 85% of the frames to be correct.
